@@ -3,6 +3,22 @@ import re
 from datetime import date
 import pandas as pd
 import streamlit as st
+st.markdown("""
+<style>
+[data-testid="stDataFrame"],
+[data-testid="stDataEditor"] {
+    border: 1px solid #808080 !important;
+    border-radius: 0 !important;
+}
+[data-testid="stDataFrame"] [role="gridcell"],
+[data-testid="stDataEditor"] [role="gridcell"],
+[data-testid="stDataFrame"] [role="columnheader"],
+[data-testid="stDataEditor"] [role="columnheader"] {
+    border-right: 1px solid #b7b7b7 !important;
+    border-bottom: 1px solid #b7b7b7 !important;
+}
+</style>
+""", unsafe_allow_html=True)
 from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Font, PatternFill, Border, Side, Alignment
 from openpyxl.utils import get_column_letter
