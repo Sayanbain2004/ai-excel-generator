@@ -1,4 +1,4 @@
-mport io
+import io
 import re
 from datetime import date
 import pandas as pd
@@ -20,9 +20,6 @@ st.markdown("""
 .hero p {font-size: 1rem; margin: 0; opacity: .95;}
 div[data-testid="stMetric"] {border: 1px solid #e4e9f2; border-radius: 12px; padding: 12px;}
 .stButton>button, .stDownloadButton>button {border-radius: 10px; min-height: 2.8rem;}
-/* Make the editable table stand out clearly */
-div[data-testid="stDataEditor"] {border: 1px solid #9CB3D1; border-radius: 8px; overflow: hidden; padding: 2px;}
-div[data-testid="stDataFrame"] {border: 1px solid #9CB3D1; border-radius: 8px; overflow: hidden;}
 .small-note {color: #5b6575; font-size: .9rem;}
 </style>
 <div class="hero">
@@ -57,13 +54,10 @@ def style_workbook(wb):
             letter = get_column_letter(col[0].column)
             max_len = max((len(str(c.value)) if c.value is not None else 0) for c in col)
             ws.column_dimensions[letter].width = min(max(max_len + 3, 12), 32)
-        grid_side = Side(style="thin", color="B8CBE3")
-        for row in ws.iter_rows(min_row=1):
+        for row in ws.iter_rows(min_row=2):
             for cell in row:
                 cell.alignment = Alignment(vertical="center", wrap_text=True)
-                cell.border = Border(left=grid_side, right=grid_side, top=grid_side, bottom=grid_side)
-        for cell in ws[1]:
-            cell.border = Border(left=grid_side, right=grid_side, top=grid_side, bottom=Side(style="medium", color="173B75"))
+                cell.border = Border(bottom=Side(style="hair", color="E7ECF3"))
 
 def df_to_xlsx(df, sheet_name="Data"):
     out = io.BytesIO()
