@@ -56,32 +56,52 @@ with st.sidebar:
 def style_workbook(wb):
     header_fill = PatternFill("solid", fgColor="173B75")
     header_font = Font(color="FFFFFF", bold=True)
-    thin_blue = Side(style="thin", color="D8E2F0")
+
+    # স্পষ্ট কালো বর্ডার
+    thin_border = Side(style="thin", color="000000")
+    full_border = Border(
+        left=thin_border,
+        right=thin_border,
+        top=thin_border,
+        bottom=thin_border
+    )
+
     for ws in wb.worksheets:
         ws.freeze_panes = "A2"
         ws.auto_filter.ref = ws.dimensions
+
+        for row in ws.iter_rows():
+            for cell in row:
+                cell.border = full_border
+                cell.alignment = Alignment(
+                    horizontal="left",
+                    vertical="center",
+                    wrap_text=True
+                )
+
+        # Header ডিজাইন
         for cell in ws[1]:
             cell.fill = header_fill
             cell.font = header_font
-            cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
-            cell.border = Border(bottom=thin_blue)
+            cell.alignment = Alignment(
+                horizontal="center",
+                vertical="center",
+                wrap_text=True
+            )
+
         ws.row_dimensions[1].height = 28
+
+        # Column width
         for col in ws.columns:
             letter = get_column_letter(col[0].column)
-            max_len = max((len(str(c.value)) if c.value is not None else 0) for c in col)
-            ws.column_dimensions[letter].width = min(max(max_len + 3, 12), 32)
-        for row in ws.iter_rows(min_row=2):
-            for cell in row:
-                cell.alignment = Alignment(vertical="center", wrap_text=True)
-                cell.border = Border(bottom=Side(style="hair", color="E7ECF3"))
+            max_len = max(
+                (len(str(c.value)) if c.value is not None else 0)
+                for c in col
+            )
+            ws.column_dimensions[letter].width = min(
+                max(max_len + 3, 12), 32
+            )
 
-def df_to_xlsx(df, sheet_name="Data"):
-    out = io.BytesIO()
-    with pd.ExcelWriter(out, engine="openpyxl") as writer:
-        df.to_excel(writer, index=False, sheet_name=sheet_name[:31] or "Data")
-        style_workbook(writer.book)
-    out.seek(0)
-    return out.getvalue()
 
 def template_xlsx(kind):
     wb = Workbook()
