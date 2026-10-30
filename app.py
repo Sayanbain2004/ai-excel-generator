@@ -1,33 +1,16 @@
 import io
-import re
 from datetime import date
+
 import pandas as pd
 import streamlit as st
-st.markdown("""
-<style>
-[data-testid="stDataFrame"],
-[data-testid="stDataEditor"] {
-    border: 1px solid #808080 !important;
-    border-radius: 0 !important;
-}
-[data-testid="stDataFrame"] [role="gridcell"],
-[data-testid="stDataEditor"] [role="gridcell"],
-[data-testid="stDataFrame"] [role="columnheader"],
-[data-testid="stDataEditor"] [role="columnheader"] {
-    border-right: 1px solid #b7b7b7 !important;
-    border-bottom: 1px solid #b7b7b7 !important;
-}
-</style>
-""", unsafe_allow_html=True)
-from openpyxl import Workbook, load_workbook
+from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Border, Side, Alignment
 from openpyxl.utils import get_column_letter
 from pypdf import PdfReader
-from PIL import Image
+
 
 st.set_page_config(page_title="AI Excel Generator", page_icon="📊", layout="wide")
 
-# Theme-like styling
 st.markdown("""
 <style>
 .block-container {padding-top: 1.6rem; max-width: 1200px;}
@@ -53,59 +36,59 @@ with st.sidebar:
     st.divider()
     st.caption("Starter version • AI API এখনো যুক্ত করা হয়নি")
 
+
 def style_workbook(wb):
+    """Apply a clear, full border to every used Excel cell."""
     header_fill = PatternFill("solid", fgColor="173B75")
     header_font = Font(color="FFFFFF", bold=True)
-
-    # স্পষ্ট কালো বর্ডার
-    thin_border = Side(style="thin", color="000000")
+    grid_side = Side(style="thin", color="000000")
     full_border = Border(
-        left=thin_border,
-        right=thin_border,
-        top=thin_border,
-        bottom=thin_border
+        left=grid_side, right=grid_side,
+        top=grid_side, bottom=grid_side
     )
 
     for ws in wb.worksheets:
         ws.freeze_panes = "A2"
-        ws.auto_filter.ref = ws.dimensions
+        if ws.max_row and ws.max_column:
+            ws.auto_filter.ref = ws.dimensions
 
         for row in ws.iter_rows():
             for cell in row:
                 cell.border = full_border
+                cell.alignment = Alignment(vertical="center", wrap_text=True)
+
+        if ws.max_row >= 1:
+            for cell in ws[1]:
+                cell.fill = header_fill
+                cell.font = header_font
                 cell.alignment = Alignment(
-                    horizontal="left",
-                    vertical="center",
-                    wrap_text=True
+                    horizontal="center", vertical="center", wrap_text=True
                 )
+            ws.row_dimensions[1].height = 28
 
-        # Header ডিজাইন
-        for cell in ws[1]:
-            cell.fill = header_fill
-            cell.font = header_font
-            cell.alignment = Alignment(
-                horizontal="center",
-                vertical="center",
-                wrap_text=True
-            )
-
-        ws.row_dimensions[1].height = 28
-
-        # Column width
         for col in ws.columns:
             letter = get_column_letter(col[0].column)
             max_len = max(
-                (len(str(c.value)) if c.value is not None else 0)
-                for c in col
+                (len(str(cell.value)) if cell.value is not None else 0)
+                for cell in col
             )
-            ws.column_dimensions[letter].width = min(
-                max(max_len + 3, 12), 32
-            )
+            ws.column_dimensions[letter].width = min(max(max_len + 3, 12), 32)
+
+
+def df_to_xlsx(df, sheet_name="Data"):
+    output = io.BytesIO()
+    safe_sheet_name = str(sheet_name)[:31] or "Data"
+    with pd.ExcelWriter(output, engine="openpyxl") as writer:
+        df.to_excel(writer, index=False, sheet_name=safe_sheet_name)
+        style_workbook(writer.book)
+    output.seek(0)
+    return output.getvalue()
 
 
 def template_xlsx(kind):
     wb = Workbook()
     ws = wb.active
+
     if kind == "Employee Details":
         ws.title = "Employee Details"
         ws.append(["Employee ID", "Employee Name", "Department", "Designation", "Phone", "Joining Date"])
@@ -120,11 +103,13 @@ def template_xlsx(kind):
         ws.append(["Employee ID", "Employee Name", "Month", "Working Days", "Present Days", "Absent Days", "Attendance %"])
         ws.append(["EMP001", "Example Name", date.today().strftime("%B %Y"), 26, 25, "=D2-E2", '=IF(D2=0,0,E2/D2)'])
         ws["G2"].number_format = "0.0%"
+
     style_workbook(wb)
-    out = io.BytesIO()
-    wb.save(out)
-    out.seek(0)
-    return out.getvalue()
+    output = io.BytesIO()
+    wb.save(output)
+    output.seek(0)
+    return output.getvalue()
+
 
 if page == "🏠 Home":
     st.subheader("আপনার কাজ শুরু করুন")
@@ -150,28 +135,29 @@ if page == "🏠 Home":
 
 elif page == "📂 File Converter":
     st.subheader("📂 File Converter")
-    st.write("Excel (.xlsx/.xls) অথবা text-based PDF আপলোড করুন।")
+    st.write("Excel (.xlsx/.xls), CSV অথবা text-based PDF আপলোড করুন।")
     uploaded = st.file_uploader("ফাইল নির্বাচন করুন", type=["xlsx", "xls", "csv", "pdf"])
-    if uploaded:
-        name = uploaded.name.lower()
+
+    if uploaded is not None:
+        filename = uploaded.name.lower()
         try:
-            if name.endswith(".xlsx"):
+            if filename.endswith(".xlsx"):
                 df = pd.read_excel(uploaded, engine="openpyxl")
                 st.success("Excel ফাইল পড়া হয়েছে। নিচে ডেটা এডিট করতে পারবেন।")
                 edited = st.data_editor(df, num_rows="dynamic", use_container_width=True, key="xlsx_editor")
                 st.download_button("⬇️ Download Excel", data=df_to_xlsx(edited), file_name="converted_data.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-            elif name.endswith(".xls"):
+            elif filename.endswith(".xls"):
                 df = pd.read_excel(uploaded, engine="xlrd")
                 edited = st.data_editor(df, num_rows="dynamic", use_container_width=True, key="xls_editor")
                 st.download_button("⬇️ Download Excel", data=df_to_xlsx(edited), file_name="converted_data.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-            elif name.endswith(".csv"):
+            elif filename.endswith(".csv"):
                 df = pd.read_csv(uploaded)
                 edited = st.data_editor(df, num_rows="dynamic", use_container_width=True, key="csv_editor")
                 st.download_button("⬇️ Download Excel", data=df_to_xlsx(edited), file_name="converted_data.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
             else:
                 reader = PdfReader(uploaded)
                 pages = [p.extract_text() or "" for p in reader.pages]
-                extracted = "\n\n".join(f"--- Page {i+1} ---\n{t}" for i, t in enumerate(pages))
+                extracted = "\n\n".join(f"--- Page {i+1} ---\n{text}" for i, text in enumerate(pages))
                 if extracted.strip():
                     st.text_area("PDF থেকে পাওয়া লেখা (প্রয়োজনে কপি/এডিট করুন)", value=extracted, height=280, key="pdf_text")
                     lines = [line.strip() for line in extracted.splitlines() if line.strip() and not line.startswith("--- Page")]
@@ -187,27 +173,32 @@ elif page == "📂 File Converter":
 elif page == "👨‍💼 Employee Details":
     st.subheader("👨‍💼 Employee Details Template")
     st.write("নিজের কর্মীদের তথ্য লিখে Excel ডাউনলোড করুন।")
-    starter = pd.DataFrame([
-        {"Employee ID":"EMP001","Employee Name":"","Department":"","Designation":"","Phone":"","Joining Date":""}
-    ])
+    starter = pd.DataFrame([{
+        "Employee ID": "EMP001", "Employee Name": "",
+        "Department": "", "Designation": "", "Phone": "", "Joining Date": ""
+    }])
     df = st.data_editor(starter, num_rows="dynamic", use_container_width=True, key="employee_editor")
     st.download_button("⬇️ Download Employee Excel", data=df_to_xlsx(df, "Employee Details"), file_name="employee_details.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
 elif page == "💰 Salary Calculator":
     st.subheader("💰 Salary Calculator")
     st.caption("Basic Salary, HRA, allowance ও deduction লিখুন। Gross/Net salary স্বয়ংক্রিয়ভাবে হিসাব হবে।")
-    starter = pd.DataFrame([
-        {"Employee ID":"EMP001","Employee Name":"","Basic Salary":15000.0,"HRA":3000.0,"Other Allowance":1000.0,"Deduction":500.0}
-    ])
-    df = st.data_editor(starter, num_rows="dynamic", use_container_width=True, key="salary_editor",
-                        column_config={
-                            "Basic Salary": st.column_config.NumberColumn(min_value=0, format="₹ %.2f"),
-                            "HRA": st.column_config.NumberColumn(min_value=0, format="₹ %.2f"),
-                            "Other Allowance": st.column_config.NumberColumn(min_value=0, format="₹ %.2f"),
-                            "Deduction": st.column_config.NumberColumn(min_value=0, format="₹ %.2f")
-                        })
+    starter = pd.DataFrame([{
+        "Employee ID": "EMP001", "Employee Name": "",
+        "Basic Salary": 15000.0, "HRA": 3000.0,
+        "Other Allowance": 1000.0, "Deduction": 500.0
+    }])
+    df = st.data_editor(
+        starter, num_rows="dynamic", use_container_width=True, key="salary_editor",
+        column_config={
+            "Basic Salary": st.column_config.NumberColumn(min_value=0, format="₹ %.2f"),
+            "HRA": st.column_config.NumberColumn(min_value=0, format="₹ %.2f"),
+            "Other Allowance": st.column_config.NumberColumn(min_value=0, format="₹ %.2f"),
+            "Deduction": st.column_config.NumberColumn(min_value=0, format="₹ %.2f"),
+        }
+    )
     calc = df.copy()
-    for col in ["Basic Salary","HRA","Other Allowance","Deduction"]:
+    for col in ["Basic Salary", "HRA", "Other Allowance", "Deduction"]:
         calc[col] = pd.to_numeric(calc[col], errors="coerce").fillna(0)
     calc["Gross Salary"] = calc["Basic Salary"] + calc["HRA"] + calc["Other Allowance"]
     calc["Net Salary"] = calc["Gross Salary"] - calc["Deduction"]
@@ -217,9 +208,11 @@ elif page == "💰 Salary Calculator":
 else:
     st.subheader("🗓️ Attendance Sheet")
     st.caption("মাস, কাজের দিন ও উপস্থিতির দিন লিখুন।")
-    starter = pd.DataFrame([
-        {"Employee ID":"EMP001","Employee Name":"","Month":date.today().strftime("%B %Y"),"Working Days":26,"Present Days":25}
-    ])
+    starter = pd.DataFrame([{
+        "Employee ID": "EMP001", "Employee Name": "",
+        "Month": date.today().strftime("%B %Y"),
+        "Working Days": 26, "Present Days": 25
+    }])
     df = st.data_editor(starter, num_rows="dynamic", use_container_width=True, key="attendance_editor")
     calc = df.copy()
     calc["Working Days"] = pd.to_numeric(calc["Working Days"], errors="coerce").fillna(0)
